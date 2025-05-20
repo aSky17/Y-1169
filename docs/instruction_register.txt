@@ -1,0 +1,45 @@
+INSTRUCTION [63:0]
+├── [63]       PRED_ENABLE (1 bit)
+│     └── 1 = Apply predicate mask
+│         0 = All active threads execute
+│
+├── [62:56]    PRED_MASK_ID (7 bits)
+│     └── Selects P_0 to P_127 (32-bit predicate register)
+│
+├── [55:48]    OPCODE (8 bits)
+│     ├── 0x01–0x0F → Integer ALU R-Type
+│     ├── 0x10–0x1F → Integer ALU I-Type
+│     ├── 0x20–0x3F → Floating Point ALU
+│     ├── 0x40–0x5F → Memory Ops (LD/ST)
+│     ├── 0x60–0x7F → Control Flow
+│     ├── 0x80–0x9F → Tensor Ops
+│     └── 0xA0–0xFF → Reserved/Atomics/Sync
+│
+├── [47:42]    RD (6 bits)
+│     └── Destination register (R0–R63)
+│
+├── [41:36]    RS1 (6 bits)
+│     └── Source register 1 (R0–R63)
+│
+├── ⬇ Format Dependent (based on OPCODE) ⬇
+│
+├───► If OPCODE ∈ R-Type (0x01–0x0F):
+│     ├── [35:30]   RS2 (6 bits)
+│     │     └── Source register 2
+│     ├── [29:14]   FUNC_CODE (16 bits)
+│     │     └── Encodes actual operation (e.g., ADD, MUL)
+│     ├── [13:10]   MODIFIERS (4 bits)
+│     │     ├── [0] SIGNED / UNSIGNED
+│     │     ├── [1] SATURATE (for clamps)
+│     │     ├── [2] CARRY / OVERFLOW detection
+│     │     └── [3] INVERT_PREDICATE
+│     └── [9:0]     RESERVED
+│
+├───► If OPCODE ∈ I-Type (0x10–0x1F):
+│     ├── [35:20]   IMM16 (16 bits)
+│     │     └── Sign-extended 16-bit immediate operand
+│     ├── [19:14]   FUNC_CODE (6 bits)
+│     │     └── Sub-opcode for op (e.g., ADDI, ANDI)
+│     ├── [13:10]   MODIFIERS (4 bits)
+│     │     ├── Same flags as above
+│     └── [9:0]     RESERVED

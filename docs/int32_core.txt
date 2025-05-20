@@ -1,0 +1,87 @@
+8-Bit Hexadecimal Opcode Map (0x00 - 0xFF)
+
+Reserved (0x00): Typically used for NOP (No Operation) or special system instructions.
+
+Arithmetic Operations (Range: 0x01 - 0x1F)
+0x01: ADD (Addition)
+0x02: SUB (Subtraction)
+0x03: MUL (Multiplication)
+0x04: DIV (Division)
+0x05: NEG (Negation / Two's Complement)
+0x06: ABS (Absolute Value)
+0x07 - 0x0F: Reserved for future arithmetic extensions
+0x10 - 0x1F: Reserved for future arithmetic extensions (e.g., REM/MOD, specific shifts with arithmetic properties)
+
+
+Logical Operations (Range: 0x20 - 0x2F)
+0x20: AND (Bitwise AND)
+0x21: OR (Bitwise OR)
+0x22: XOR (Bitwise XOR)
+0x23: NOT (Bitwise NOT)
+0x24: NOR (Bitwise NOR)
+0x25 - 0x2F: Reserved for future logical extensions
+
+
+Shift & Rotate Operations (Range: 0x30 - 0x3F)
+0x30: SHL (Shift Left Logical)
+0x31: SHR (Shift Right Logical)
+0x32: ROTL (Rotate Left)
+0x33: ROTR (Rotate Right)
+0x34 - 0x3F: Reserved for future shift/rotate extensions (e.g., ASR - Arithmetic Shift Right, or specific double-precision shifts)
+
+
+Comparison Operations (Range: 0x40 - 0x5F)
+0x40: EQ (Equal)
+0x41: NE (Not Equal)
+0x42: LT_S (Less Than - Signed)
+0x43: LE_S (Less Than or Equal - Signed)
+0x44: GT_S (Greater Than - Signed)
+0x45: GE_S (Greater Than or Equal - Signed)
+0x46: LT_U (Less Than - Unsigned)
+0x47: LE_U (Less Than or Equal - Unsigned)
+0x48: GT_U (Greater Than - Unsigned)
+0x49: GE_U (Greater Than or Equal - Unsigned)
+0x4A - 0x5F: Reserved for future comparison extensions (e.g., bitfield comparisons, specialized predicates)
+
+
+Min/Max Operations (Range: 0x60 - 0x6F)
+0x60: MIN_S (Minimum - Signed)
+0x61: MAX_S (Maximum - Signed)
+0x62: MIN_U (Minimum - Unsigned)
+0x63: MAX_U (Maximum - Unsigned)
+0x64 - 0x6F: Reserved for future min/max or clamp operations
+
+
+Bit Manipulation Operations (Range: 0x70 - 0x7F)
+0x70: BITREV (Bit Reverse)
+0x71: CLZ (Count Leading Zeros)
+0x72: POPC (Population Count / Count Set Bits)
+0x73: BREV (Byte Reverse)
+0x74: BFE (Bit Field Extract - Note: This will likely need additional instruction bits beyond just opcode for start/length, or another operand for that info.)
+0x75 - 0x7F: Reserved for future bit manipulation extensions (e.g., BFI - Bit Field Insert, Find First Set/Clear)
+
+
+Saturated Operations (Range: 0x80 - 0x8F)
+0x80: ADD.SAT (Saturated Add)
+0x81: SUB.SAT (Saturated Subtract)
+0x82 - 0x8F: Reserved for future saturated operations (e.g., MUL.SAT)
+
+
+Overflow Detect Operations (Range: 0x90 - 0x9F)
+0x90: ADD.CC (Add with Carry Out indication)
+0x91: SUB.CC (Subtract with Borrow Out indication)
+0x92: MUL.CC (Multiply with Overflow indication)
+0x93 - 0x9F: Reserved for future overflow/carry chain operations
+
+
+Remaining Opcodes (0xA0 - 0xFF):
+0xA0 - 0xFF: Highly Recommended to reserve for future Instruction Set Architecture extensions. This large block can be used for:
+Floating-point instructions (if you add an FP32 core later).
+Memory load/store instructions.
+Control flow instructions (branches, calls).
+Special Function Unit (SFU) instructions.
+Tensor Core instructions.
+Ray Tracing Core instructions.
+Synchronization primitives.
+System instructions.
+Debugging instructions.
