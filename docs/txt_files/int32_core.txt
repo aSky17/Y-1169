@@ -1,4 +1,4 @@
-8-Bit Hexadecimal Opcode Map (0x00 - 0xFF)
+Integer Opcodes:
 
 Reserved (0x00): Typically used for NOP (No Operation) or special system instructions.
 

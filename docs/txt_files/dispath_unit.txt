@@ -1,0 +1,65 @@
+Dispatch Unit Functions and Features
+The Dispatch Unit is the last stage before instruction execution, responsible for preparing instructions and operands for the functional units. It acts as the gatekeeper, ensuring all conditions for execution are met.
+
+Core Features:
+
+1. Instruction Decode and Type Identification:
+Receives the 64-bit IR from the Warp Scheduler.
+Fully decodes the OPCODE and FUNC_CODE to determine the exact operation and its properties (e.g., R-Type integer add, I-Type floating-point multiply, memory load).
+Identifies the target functional unit(s) based on the instruction type.
+
+2. Operand Fetch and Immediate Generation:
+Register File Read: Reads source operands (RS1, RS2, RS3) from the Register File. This involves managing multiple read ports to the Register File.
+Immediate Value Generation:
+Extracts and properly constructs immediate values (IMM16, IMM_LSB, IMM_MSB).
+Performs sign-extension where required (e.g., 16-bit to 32-bit).
+
+3. Modifier Interpretation and Control Signal Generation:
+Parses the MODIFIERS field (bits 13:10) and translates them into granular control signals for the target functional unit:
+signed_operation_enable / unsigned_operation_enable.
+saturate_enable.
+set_condition_codes_enable (for integer ALU).
+set_fp_exception_flags_enable (for FP ALU).
+invert_predicate_enable.
+Memory-specific flags (e.g., byte_access, halfword_access, cache_hint).
+Control flow specific flags (e.g., branch_if_zero, call_enable).
+
+4. Predicate Mask Application (Thread Masking):
+Applies the PRED_ENABLE bit and the predicate mask identified by PRED_MASK_ID (potentially inverted by INVERT_PREDICATE).
+Generates a per-thread active mask (or predicate mask) that is sent along with the instruction to the functional unit, enabling only active threads to perform the operation within the SIMT lanes. This is critical for efficient divergence handling at the execution level.
+
+5. Functional Unit Handshaking & Stall Logic:
+Asserts dispatch_valid and presents the instruction, operands, and control signals to the target FU.
+Monitors the fu_accept (or fu_ready) signal from the FU. If the FU cannot accept the instruction (e.g., busy, pipeline full), the Dispatch Unit stalls the pipeline (and informs the Warp Scheduler).
+For multi-cycle operations, tracks when an instruction is accepted by the FU and its expected completion latency.
+
+6. Bypassing / Forwarding Network Control:
+Manages the internal data bypassing network that routes results from one FU's output directly to the input of another FU (or even back to the same FU) before the result is written to the Register File. This reduces stalls for data dependencies.
+Detects if an operand is available via bypass and configures the muxes accordingly.
+
+7. Result Write-Back and Status Flag Collection:
+Monitors result_valid and result_out signals from all FUs.
+When a result is valid:
+Writes result_out to the specified RD (destination register) in the Register File.
+Collects and updates global/warp-specific status flags (e.g., carry_flag, overflow_flag, zero_flag, negative_flag, NaN_flag, Inf_flag) based on the instruction's outcome and set_cc_flags/set_fp_exception_flags modifiers.
+
+
+8. Concurrent Dispatch from Multiple Ports:
+Matches the Warp Scheduler's ability to issue multiple instructions by having multiple dispatch ports, allowing simultaneous dispatch of independent instructions to different functional units (e.g., one INT ALU op and one FP ALU op at the same time).
+
+9. Dynamic Data Type Awareness:
+For architectures supporting mixed-precision (FP16, INT8, INT4, TF32, etc.), the Dispatch Unit understands the source and destination data types from the instruction.
+Routes operations to specific sub-units within the general-purpose ALUs or to specialized Tensor Cores that handle these data types.
+
+10. Specialized Unit Control:
+Provides specific control signals and data formatting for dedicated units like:
+Tensor Cores: Setting up matrix dimensions, data types, accumulation modes.
+Ray Tracing Cores: Preparing ray definitions, BVH traversal commands.
+Texture Units / SFUs (Special Function Units): Controlling complex operations like reciprocal, square root, sine/cosine.
+
+11. Memory Coalescing Hints/Control:
+For memory access instructions, the Dispatch Unit can provide hints to the Memory Unit to help coalesce individual thread memory requests into larger, more efficient bus transactions. This might involve reordering or grouping requests.
+
+12. Exception and Fault Handling:
+Detects certain instruction-level exceptions (e.g., illegal instruction, alignment faults for memory access) before dispatch or upon early FU feedback.
+Triggers exception handling routines or informs the Warp Scheduler/control logic.

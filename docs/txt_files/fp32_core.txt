@@ -1,0 +1,24 @@
+We will leverage SystemVerilog's built int floating-point operators for behavioural modeling.
+On synthesis, these operators map to pre-defined floating-point IP blocks which are usually IEEE 754 compliant.
+
+0xA0: FADD (Floating-Point Addition)
+0xA1: FSUB (Floating-Point Subtraction)
+0xA2: FMUL (Floating-Point Multiplication)
+0xA3: FDIV (Floating-Point Division)
+0xA4: FNEG (Floating-Point Negation)
+0xA5: FABS (Floating-Point Absolute Value)
+0xA6: FSQRT (Floating-Point Square Root)
+0xA7: FRCP (Floating-Point Reciprocal: 1.0 / X)
+0xA8: FRSQRT (Floating-Point Reciprocal Square Root: 1.0 / sqrt(X))
+0xA9: FMA (Fused Multiply-Add: (A * B) + C)
+0xAA: FMIN (Floating-Point Minimum)
+0xAB: FMAX (Floating-Point Maximum)
+0xAC: FTOI (Floating-Point to Signed Integer Conversion)
+0xAD: ITOF (Signed Integer to Floating-Point Conversion)
+0xAE: FEQ (Floating-Point Equal Comparison)
+0xAF: FNE (Floating-Point Not Equal Comparison)
+0xB0: FLT (Floating-Point Less Than Comparison)
+0xB1: FLE (Floating-Point Less Than or Equal Comparison)
+0xB2: FGT (Floating-Point Greater Than Comparison)
+0xB3: FGE (Floating-Point Greater Than or Equal Comparison)
+0xB4 - 0xBF: Reserved for future floating-point extensions (e.g., double-precision, transcendentals, more complex conversions, rounding modes).
