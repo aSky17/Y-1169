@@ -1,4 +1,4 @@
-//Integer 32-bit ALU core 
+//2 stage pipelined Integer 32-bit ALU core 
 
 `ifndef INT32_CORE_SV
 `define INT32_CORE_SV
@@ -34,273 +34,339 @@ module int32_core #(
         current_operand_b = use_immediate ? immediate_value : operand_b;
     end
 
-    //internal registers for pipelined output 
-    //If the results are not registered -> the output may be read too early, even before computation finishes. Hence buggy bugs
-    logic [DATA_WIDTH-1:0] result_reg;
-    logic result_valid_reg;
-    logic carry_reg;
-    logic overflow_reg;
-    logic is_zero_reg;
-    logic is_negative_reg;
+    //pipelining registers
+    //Stage-1 registers: Latch inputs from current cycle
+    logic valid_instruction_s1_q;
+    logic [OPCODE_WIDTH-1:0] opcode_s1_q;
+    logic [DATA_WIDTH-1:0] operand_a_s1_q;
+    logic [DATA_WIDTH-1:0] current_operand_b_s1_q;
+
+    //Stage-2 registers: Latch results after execution
+    logic [DATA_WIDTH-1:0] result_q;
+    logic result_valid_q;
+    logic carry_q;
+    logic overflow_q;
+    logic is_zero_q;
+    logic is_negative_q;
 
 
-    always_ff @( posedge clk or posedge rst ) begin
-        if (rst) begin 
-            result_valid_reg <= 1'b0;
-            result_reg <= '0;
-            carry_reg <= 1'b0;
-            overflow_reg <= 1'b0;
-            is_zero_reg <= 1'b0;
-            is_negative_reg <= 1'b0;
-        end else if (valid_instruction) begin 
-            logic [DATA_WIDTH-1:0] next_result_val = '0;
-            logic next_carry_val = 1'b0;
-            logic next_overflow_val = 1'b0;
-            logic next_is_zero_val = 1'b0;
-            logic next_is_negative_val = 1'b0;
+    //combinational logic for stage 2
+    //wires 
+    logic [DATA_WIDTH-1:0] result_s2_comb;
+    logic carry_s2_comb;
+    logic overflow_s2_comb;
+    logic is_zero_s2_comb;
+    logic is_negative_s2_comb;
 
-            //sign casting: behavioural modelling
-            logic signed [DATA_WIDTH-1:0] operand_a_signed_val = $signed(operand_a);
-            logic signed [DATA_WIDTH-1:0] current_operand_b_signed_val = $signed(current_operand_b);
+    always_comb begin
+        result_s2_comb = '0;
+        carry_s2_comb = 1'b0;
+        overflow_s2_comb = 1'b0;
+        is_zero_s2_comb = 1'b0;
+        is_negative_s2_comb = 1'b0;
 
-            case(opcode) 
-                //arithmetic operations
-                OPCODE_INT_ABS_R, OPCODE_INT_ADD_I: begin
-                    logic [DATA_WIDTH:0] sum_unsigned =  $unsigned(operand_a) + $unsigned(current_operand_b);
-                    logic [DATA_WIDTH:0] sum_signed = operand_a_signed_val + current_operand_b_signed_val;
+        if(valid_instruction_s1_q) begin
+            //sign casting for stage 1 
+            logic signed [DATA_WIDTH-1:0] operand_a_signed_s1_comb = $signed(operand_a_s1_q);
+            logic signed [DATA_WIDTH-1:0] current_operand_b_signed_s1_comb = $signed(current_operand_b_s1_q);
+            
+            case (opcode_s1_q)
 
-                    next_result_val = sum_unsigned[DATA_WIDTH-1:0];
+            // Arithmetic Operations
+                OPCODE_INT_ADD_R, OPCODE_INT_ADD_I: begin
+                    // Signed and unsigned sums with one extra bit for carry/overflow detection
+                    logic [DATA_WIDTH:0] sum_unsigned = $unsigned(operand_a_s1_q) + $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    logic signed [DATA_WIDTH:0] sum_signed_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
 
-                    //overflow for signed: if sign of both the operands are same and sign of one of the operand is different from result
-                    if (operand_a_signed_val[DATA_WIDTH-1] == current_operand_b_signed_val[DATA_WIDTH-1] &&
-                        operand_a_signed_val[DATA_WIDTH-1] != next_result_val[DATA_WIDTH-1]) begin
-                            next_overflow_val = 1'b1;
+                    result_s2_comb = sum_unsigned[DATA_WIDTH-1:0]; // Result is the lower DATA_WIDTH bits
+
+                    // Overflow for signed add: (sign_A == sign_B) && (sign_A != sign_Result)
+                    if ((operand_a_signed_s1_comb[DATA_WIDTH-1] == current_operand_b_signed_s1_comb[DATA_WIDTH-1]) &&
+                        (operand_a_signed_s1_comb[DATA_WIDTH-1] != sum_signed_extended[DATA_WIDTH-1])) begin
+                        overflow_s2_comb = 1'b1;
                     end
-
-                    next_carry_val = sum_unsigned[DATA_WIDTH]; //carry for unsigned
+                    carry_s2_comb = sum_unsigned[DATA_WIDTH]; // Carry for unsigned add
                 end
-                OPCODE_INT_SUB_R, OPCODE_INT_SUB_I: begin 
-                    logic [DATA_WIDTH:0] diff_unsigned = $unsigned(operand_a) - $unsigned(current_operand_b);
-                    logic [DATA_WIDTH:0] diff_signed = operand_a_signed_val - current_operand_b_signed_val;
+                OPCODE_INT_SUB_R, OPCODE_INT_SUB_I: begin
+                    // Signed and unsigned differences with one extra bit for borrow/overflow detection
+                    logic [DATA_WIDTH:0] diff_unsigned = $unsigned(operand_a_s1_q) - $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    logic signed [DATA_WIDTH:0] diff_signed_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
 
-                    next_result_val = diff_unsigned[DATA_WIDTH-1:0];
+                    result_s2_comb = diff_unsigned[DATA_WIDTH-1:0]; // Result is the lower DATA_WIDTH bits
 
-                    //overflow for signed: if both operand's sign is diff but sign of result is same is operand_b
-                    if (operand_a_signed_val[DATA_WIDTH-1] != current_operand_b_signed_val[DATA_WIDTH-1] &&
-                        current_operand_b_signed_val[DATA_WIDTH] == next_result_val[DATA_WIDTH-1]) begin 
-                            next_overflow_val = 1'b1;
+                    // Overflow for signed subtract: (sign_A != sign_B) && (sign_A != sign_Result)
+                    if ((operand_a_signed_s1_comb[DATA_WIDTH-1] != current_operand_b_signed_s1_comb[DATA_WIDTH-1]) &&
+                        (operand_a_signed_s1_comb[DATA_WIDTH-1] != diff_signed_extended[DATA_WIDTH-1])) begin
+                        overflow_s2_comb = 1'b1;
                     end
-
-                    next_carry_val = diff_unsigned[DATA_WIDTH];
+                    carry_s2_comb = diff_unsigned[DATA_WIDTH]; // Borrow for unsigned subtract (MSB of diff_unsigned)
                 end
-                OPCODE_INT_MUL_R, OPCODE_INT_MUL_I: begin 
-                    logic [DATA_WIDTH*2-1:0] product_signed = operand_a_signed_val * current_operand_b_signed_val;
-                    next_result_val = product_signed[DATA_WIDTH-1:0];
+                OPCODE_INT_MUL_R, OPCODE_INT_MUL_I: begin
+                    // Signed multiplication produces a 2*DATA_WIDTH bit result
+                    logic signed [DATA_WIDTH*2-1:0] product_signed = operand_a_signed_s1_comb * current_operand_b_signed_s1_comb;
+                    result_s2_comb = product_signed[DATA_WIDTH-1:0]; // Truncate to DATA_WIDTH bits
 
-                    //overflow for signed mul: if upper bits are not signed extension of lower bits
-                    if (product_signed[DATA_WIDTH*2-1] == 1'b0) begin //result is positive
-                        if (product_signed[DATA_WIDTH*2-1:DATA_WIDTH] != '0) next_overflow_val = 1'b1; 
-                    end else if (product_signed[DATA_WIDTH*2-1] == 1'b1) begin //result is negative
-                        if (product_signed[DATA_WIDTH*2-1:DATA_WIDTH] != {DATA_WIDTH{1'b1}}) next_overflow_val = 1'b1;
+                    // Overflow for signed multiply: if upper DATA_WIDTH bits are not sign extension of lower bits
+                    if (product_signed[DATA_WIDTH*2-1] == 1'b0) begin // Result is positive
+                        if (product_signed[DATA_WIDTH*2-1:DATA_WIDTH] != '0) overflow_s2_comb = 1'b1;
+                    end else begin // Result is negative
+                        if (product_signed[DATA_WIDTH*2-1:DATA_WIDTH] != {DATA_WIDTH{1'b1}}) overflow_s2_comb = 1'b1;
                     end
                 end
-                OPCODE_INT_DIV_R: begin 
-                    if (current_operand_b == 1'b0) begin
-                        next_result_val = 'x;
-                    end else begin 
-                        next_result_val = operand_a_signed_val / current_operand_b_signed_val;
+                OPCODE_INT_DIV_R, OPCODE_INT_DIV_I: begin
+                    if (current_operand_b_s1_q == '0) begin // Using current_operand_b_s1_q
+                        result_s2_comb = 'x; // Indicate undefined result for simulation on divide by zero
+                        // In real hardware, consider a specific error flag or default value.
+                    end else begin
+                        result_s2_comb = operand_a_signed_s1_comb / current_operand_b_signed_s1_comb;
                         // Overflow for signed division: MIN_INT / -1 results in positive overflow
-                        //-2147483648 / -1 = 2147483648 → doesn't fit in 32-bit signed int (max is 2147483647)
-                        if (operand_a_signed_val == 32'h80000000 && current_operand_b_signed_val == 32'hFFFFFFFF) begin
-                            next_overflow_val = 1'b1;
+                        // e.g., -2147483648 / -1 = 2147483648 (which doesn't fit in 32-bit signed int max 2147483647)
+                        if (operand_a_signed_s1_comb == 32'h80000000 && current_operand_b_signed_s1_comb == 32'hFFFFFFFF) begin
+                            overflow_s2_comb = 1'b1;
                         end
                     end
                 end
-                OPCODE_INT_NEG_R: begin 
-                    next_result_val = -operand_a_signed_val;
+                OPCODE_INT_NEG_R: begin
+                    result_s2_comb = -operand_a_signed_s1_comb;
 
-                    //-(-2147483648) = 2147483648 → not representable in 32-bit signed int
-                    if (operand_a_signed_val = 32'h80000000) begin
-                        next_overflow_val = 1'b1;
+                    // Overflow for negation: -MIN_INT results in positive overflow
+                    // -(-2147483648) = 2147483648 (not representable in 32-bit signed int)
+                    if (operand_a_signed_s1_comb == 32'h80000000) begin
+                        overflow_s2_comb = 1'b1;
                     end
                 end
-                OPCODE_INT_ABS_R: begin 
-                    next_result_val = (operand_a_signed_val[DATA_WIDTH-1]) ? -operand_a_signed_val : operand_a_signed_val;
-                    if (operand_a_signed_val == 32'h80000000) begin 
-                        next_overflow_val = 1'b1;
+                OPCODE_INT_ABS_R: begin
+                    result_s2_comb = (operand_a_signed_s1_comb[DATA_WIDTH-1]) ? -operand_a_signed_s1_comb : operand_a_signed_s1_comb;
+                    // Overflow for absolute: |MIN_INT| results in positive overflow
+                    if (operand_a_signed_s1_comb == 32'h80000000) begin
+                        overflow_s2_comb = 1'b1;
                     end
                 end
-                //Logical operations
-                OPCODE_INT_AND_R, OPCODE_INT_AND_I: next_result_val = operand_a & current_operand_b;
-                OPCODE_INT_OR_R,  OPCODE_INT_OR_I:  next_result_val = operand_a | current_operand_b;
-                OPCODE_INT_XOR_R: next_result_val = operand_a ^ current_operand_b;
-                OPCODE_INT_NOT_R: next_result_val = ~operand_a;
-                OPCODE_INT_NOR_R: next_result_val = ~(operand_a | current_operand_b);
 
-                //Shift and rotate opertions
-                //logical shift, assuming shift length is stored in last five bits of current_operand_b
-                OPCODE_INT_SHL_R: next_result_val = operand_a << current_operand_b[4:0];
-                OPCODE_INT_SHR_R: next_result_val = operand_a >> current_operand_b[4:0];
-                // Arithmetic right shift
-                OPCODE_INT_SAR_R: next_result_val = operand_a_signed_val >>> current_operand_b[4:0]; 
+                // Logical Operations
+                OPCODE_INT_AND_R, OPCODE_INT_AND_I: result_s2_comb = operand_a_s1_q & current_operand_b_s1_q; 
+                OPCODE_INT_OR_R,  OPCODE_INT_OR_I:  result_s2_comb = operand_a_s1_q | current_operand_b_s1_q; 
+                OPCODE_INT_XOR_R: result_s2_comb = operand_a_s1_q ^ current_operand_b_s1_q; 
+                OPCODE_INT_NOT_R: result_s2_comb = ~operand_a_s1_q; 
+                OPCODE_INT_NOR_R: result_s2_comb = ~(operand_a_s1_q | current_operand_b_s1_q);
 
-                OPCODE_INT_ROTL_R: begin
-                    logic [4:0] shift_amount = current_operand_b[4:0];
-                    next_result_val = (operand_a << shift_amount) | (operand_a >> (DATA_WIDTH-shift_amount));
+                // Shift and Rotate Operations
+                // Shift amount is assumed to be in the lower 5 bits for 32-bit data (log2(32) = 5)
+                OPCODE_INT_SHL_R: result_s2_comb = operand_a_s1_q << current_operand_b_s1_q[4:0];
+                OPCODE_INT_SHR_R: result_s2_comb = operand_a_s1_q >> current_operand_b_s1_q[4:0]; 
+                OPCODE_INT_SAR_R: result_s2_comb = operand_a_signed_s1_comb >>> current_operand_b_s1_q[4:0]; 
+
+                OPCODE_INT_ROTL_R: begin // Rotate Left
+                    logic [4:0] shift_amount = current_operand_b_s1_q[4:0]; 
+                    result_s2_comb = (operand_a_s1_q << shift_amount) | (operand_a_s1_q >> (DATA_WIDTH-shift_amount)); 
                 end
-                OPCODE_INT_ROTR_R: begin
-                    logic [4:0] shift_amount = current_operand_b[4:0];
-                    next_result_val = (operand_a >> shift_amount) | (operand_a << (DATA_WIDTH-shift_amount));
+                OPCODE_INT_ROTR_R: begin // Rotate Right
+                    logic [4:0] shift_amount = current_operand_b_s1_q[4:0]; 
+                    result_s2_comb = (operand_a_s1_q >> shift_amount) | (operand_a_s1_q << (DATA_WIDTH-shift_amount)); 
                 end
 
-                //comparison operations
-                OPCODE_INT_EQ_R:    next_result_val = (operand_a == current_operand_b) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_NE_R:    next_result_val = (operand_a != current_operand_b) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_LTS_R:   next_result_val = (operand_a_signed_val < current_operand_b_signed_val) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_LES_R:   next_result_val = (operand_a_signed_val <= current_operand_b_signed_val) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_GTS_R:   next_result_val = (operand_a_signed_val > current_operand_b_signed_val) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_GES_R:   next_result_val = (operand_a_signed_val >= current_operand_b_signed_val) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_LTU_R:   next_result_val = ($unsigned(operand_a) < $unsigned(current_operand_b)) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_LEU_R:   next_result_val = ($unsigned(operand_a) <= $unsigned(current_operand_b)) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_GTU_R:   next_result_val = ($unsigned(operand_a) > $unsigned(current_operand_b)) ? {DATA_WIDTH{1'b1}} : '0;
-                OPCODE_INT_GEU_R:   next_result_val = ($unsigned(operand_a) >= $unsigned(current_operand_b)) ? {DATA_WIDTH{1'b1}} : '0;
-            
+                // Comparison Operations
+                OPCODE_INT_EQ_R:   result_s2_comb = (operand_a_s1_q == current_operand_b_s1_q) ? {DATA_WIDTH{1'b1}} : '0; 
+                OPCODE_INT_NE_R:   result_s2_comb = (operand_a_s1_q != current_operand_b_s1_q) ? {DATA_WIDTH{1'b1}} : '0; 
+                OPCODE_INT_LTS_R:  result_s2_comb = (operand_a_signed_s1_comb < current_operand_b_signed_s1_comb) ? {DATA_WIDTH{1'b1}} : '0;
+                OPCODE_INT_LES_R:  result_s2_comb = (operand_a_signed_s1_comb <= current_operand_b_signed_s1_comb) ? {DATA_WIDTH{1'b1}} : '0;
+                OPCODE_INT_GTS_R:  result_s2_comb = (operand_a_signed_s1_comb > current_operand_b_signed_s1_comb) ? {DATA_WIDTH{1'b1}} : '0;
+                OPCODE_INT_GES_R:  result_s2_comb = (operand_a_signed_s1_comb >= current_operand_b_signed_s1_comb) ? {DATA_WIDTH{1'b1}} : '0;
+                OPCODE_INT_LTU_R:  result_s2_comb = ($unsigned(operand_a_s1_q) < $unsigned(current_operand_b_s1_q)) ? {DATA_WIDTH{1'b1}} : '0; 
+                OPCODE_INT_LEU_R:  result_s2_comb = ($unsigned(operand_a_s1_q) <= $unsigned(current_operand_b_s1_q)) ? {DATA_WIDTH{1'b1}} : '0; 
+                OPCODE_INT_GTU_R:  result_s2_comb = ($unsigned(operand_a_s1_q) > $unsigned(current_operand_b_s1_q)) ? {DATA_WIDTH{1'b1}} : '0;
+                OPCODE_INT_GEU_R:  result_s2_comb = ($unsigned(operand_a_s1_q) >= $unsigned(current_operand_b_s1_q)) ? {DATA_WIDTH{1'b1}} : '0; 
+
                 // Min/Max Operations
-                OPCODE_INT_MINS_R:  next_result_val = (operand_a_signed_val < current_operand_b_signed_val) ? operand_a : current_operand_b;
-                OPCODE_INT_MAXS_R:  next_result_val = (operand_a_signed_val > current_operand_b_signed_val) ? operand_a : current_operand_b;
-                OPCODE_INT_MINU_R:  next_result_val = ($unsigned(operand_a) < $unsigned(current_operand_b)) ? operand_a : current_operand_b;
-                OPCODE_INT_MAXU_R:  next_result_val = ($unsigned(operand_a) > $unsigned(current_operand_b)) ? operand_a : current_operand_b;
+                OPCODE_INT_MINS_R: result_s2_comb = (operand_a_signed_s1_comb < current_operand_b_signed_s1_comb) ? operand_a_s1_q : current_operand_b_s1_q; 
+                OPCODE_INT_MAXS_R: result_s2_comb = (operand_a_signed_s1_comb > current_operand_b_signed_s1_comb) ? operand_a_s1_q : current_operand_b_s1_q; 
+                OPCODE_INT_MINU_R: result_s2_comb = ($unsigned(operand_a_s1_q) < $unsigned(current_operand_b_s1_q)) ? operand_a_s1_q : current_operand_b_s1_q; 
+                OPCODE_INT_MAXU_R: result_s2_comb = ($unsigned(operand_a_s1_q) > $unsigned(current_operand_b_s1_q)) ? operand_a_s1_q : current_operand_b_s1_q; 
 
-                //bit manipulation operations
-                OPCODE_INT_BIOPCODE_INT_BITREV_R: begin 
-                    for (int i = 0;i<DATA_WIDTH;i++) begin 
-                        next_result_val[i] = operand_a[DATA_WIDTH-1-i]
+                // Bit Manipulation Operations
+                OPCODE_INT_BITREV_R: begin
+                    for (int i = 0; i < DATA_WIDTH; i++) begin
+                        result_s2_comb[i] = operand_a_s1_q[DATA_WIDTH-1-i]; // Using operand_a_s1_q
                     end
                 end
-                OPCODE_INT_CLZ_R: begin 
+
+                OPCODE_INT_CLZ_R: begin // Count Leading Zeros
                     int count = 0;
-                    for (int i = DATA_WIDTH-1;i>=0;i++) begin 
-                        if (operand_a[i] == 1'b1) begin 
-                            break;
+                    for (int i = DATA_WIDTH-1; i >= 0; i--) begin
+                        if (operand_a_s1_q[i] == 1'b1) begin // Using operand_a_s1_q
+                            break; // Stop counting when first '1' is found
                         end
                         count++;
                     end
-                    next_result_val = count;
+                    result_s2_comb = count;
                 end
-                OPCODE_INT_POPC_R: begin 
+
+                OPCODE_INT_POPC_R: begin // Population Count (Count Set Bits)
                     int count = 0;
-                    for (int i = 0; i<DATA_WIDTH;i++) begin 
-                        if (operand_a[i] == 1'b1) begin 
+                    for (int i = 0; i < DATA_WIDTH; i++) begin
+                        if (operand_a_s1_q[i] == 1'b1) begin // Using operand_a_s1_q
                             count++;
                         end
                     end
-                    next_result_val = count;
+                    result_s2_comb = count;
                 end
-                OPCODE_INT_BYTEREV_R: begin 
-                    for (int i = 0;i<DATA_WIDTH/8;i++) begin 
-                        for (int j = 0;j<8;j++) begin 
-                            next_result_val[i*8 + j] = operand_a[i*8 + (7-j)];
+
+                OPCODE_INT_BYTEREV_R: begin // Byte Reversal (for 32-bit, reverses 4 bytes)
+                    for (int i = 0; i < DATA_WIDTH/8; i++) begin // Iterate through bytes
+                        for (int j = 0; j < 8; j++) begin // Iterate through bits within each byte
+                            result_s2_comb[i*8 + j] = operand_a_s1_q[i*8 + (7-j)]; // Using operand_a_s1_q
                         end
                     end
                 end
-                OPCODE_INT_BFE_R: begin 
-                    logic [4:0] bfe_start_bit = current_operand_b[4:0];
-                    logic [4:0] bfe_length = current_operand_b[9:5];
+                OPCODE_INT_BFE_R: begin // Bit Field Extract
+                    logic [4:0] bfe_start_bit = current_operand_b_s1_q[4:0]; // Using current_operand_b_s1_q
+                    logic [4:0] bfe_length = current_operand_b_s1_q[9:5]; // Length is in bits [9:5] of current_operand_b_s1_q
 
-                    next_result_val = '0; //clear the result first
-                    for (int i = 0; i < bfe_length;i++) begin 
-                        if ((bfe_start_bit+i) < DATA_WIDTH) begin 
-                            next_result_val[i] = operand_a[bfe_start_bit+i]; 
+                    result_s2_comb = '0; // Clear the result register first
+                    for (int i = 0; i < bfe_length; i++) begin
+                        if ((bfe_start_bit + i) < DATA_WIDTH) begin // Ensure we don't read beyond operand_a_s1_q's width
+                            result_s2_comb[i] = operand_a_s1_q[bfe_start_bit + i]; // Using operand_a_s1_q
                         end
                     end
                 end
 
-                // Saturated Operations
+                // Saturated Operations (for signed integers)
                 OPCODE_INT_ADDSAT_R: begin
-                    logic signed [DATA_WIDTH:0] sum_sat_extended = operand_a_signed_val + current_operand_b_signed_val;
-                    if ((operand_a_signed_val > 0 && current_operand_b_signed_val > 0 && sum_sat_extended[DATA_WIDTH] == 1'b1) || // Positive overflow
-                        (operand_a_signed_val < 0 && current_operand_b_signed_val < 0 && sum_sat_extended[DATA_WIDTH] == 1'b0)) begin // Negative overflow
-                        next_overflow_val = 1'b1;
-                        if (sum_sat_extended[DATA_WIDTH] == 1'b1) next_result_val = 32'h7FFFFFFF; // Max signed 32-bit
-                        else next_result_val = 32'h80000000; // Min signed 32-bit
+                    logic signed [DATA_WIDTH:0] sum_sat_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
+                    // Check for signed overflow using classic condition
+                    if ((operand_a_signed_s1_comb[DATA_WIDTH-1] == current_operand_b_signed_s1_comb[DATA_WIDTH-1]) && // Signs are the same
+                        (operand_a_signed_s1_comb[DATA_WIDTH-1] != sum_sat_extended[DATA_WIDTH-1])) begin // Sign of sum is different
+                        overflow_s2_comb = 1'b1;
+                        if (operand_a_signed_s1_comb[DATA_WIDTH-1] == 1'b0) begin // Positive overflow, saturate to MAX_INT
+                            result_s2_comb = {1'b0, {DATA_WIDTH-1{1'b1}}}; // 32'h7FFFFFFF
+                        end else begin // Negative overflow, saturate to MIN_INT
+                            result_s2_comb = {1'b1, {DATA_WIDTH-1{1'b0}}}; // 32'h80000000
+                        end
                     end else begin
-                        next_result_val = sum_sat_extended[DATA_WIDTH-1:0];
+                        result_s2_comb = sum_sat_extended[DATA_WIDTH-1:0]; // No overflow, regular result
                     end
                 end
+
                 OPCODE_INT_SUBSAT_R: begin
-                    logic signed [DATA_WIDTH:0] diff_sat_extended = operand_a_signed_val - current_operand_b_signed_val;
-                    if ((operand_a_signed_val > 0 && current_operand_b_signed_val < 0 && diff_sat_extended[DATA_WIDTH] == 1'b1) || // Positive overflow
-                        (operand_a_signed_val < 0 && current_operand_b_signed_val > 0 && diff_sat_extended[DATA_WIDTH] == 1'b0)) begin // Negative overflow
-                        next_overflow_val = 1'b1;
-                        if (diff_sat_extended[DATA_WIDTH] == 1'b1) next_result_val = 32'h7FFFFFFF; // Max signed 32-bit
-                        else next_result_val = 32'h80000000; // Min signed 32-bit
+                    logic signed [DATA_WIDTH:0] diff_sat_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
+                    // Check for signed overflow using classic condition
+                    if ((operand_a_signed_s1_comb[DATA_WIDTH-1] != current_operand_b_signed_s1_comb[DATA_WIDTH-1]) && // Signs are different
+                        (operand_a_signed_s1_comb[DATA_WIDTH-1] != diff_sat_extended[DATA_WIDTH-1])) begin // Sign of difference is different from op_a
+                        overflow_s2_comb = 1'b1;
+                        if (operand_a_signed_s1_comb[DATA_WIDTH-1] == 1'b0) begin // Positive overflow, saturate to MAX_INT
+                            result_s2_comb = {1'b0, {DATA_WIDTH-1{1'b1}}}; // 32'h7FFFFFFF
+                        end else begin // Negative overflow, saturate to MIN_INT
+                            result_s2_comb = {1'b1, {DATA_WIDTH-1{1'b0}}}; // 32'h80000000
+                        end
                     end else begin
-                        next_result_val = diff_sat_extended[DATA_WIDTH-1:0];
+                        result_s2_comb = diff_sat_extended[DATA_WIDTH-1:0]; // No overflow, regular result
                     end
                 end
 
                 // Overflow/Carry Detect Operations (set flags but result is normal wrapped arithmetic)
-                OPCODE_INT_ADDCC_R: begin
-                    logic [DATA_WIDTH:0] sum_cc_extended = $unsigned(operand_a) + $unsigned(current_operand_b);
-                    next_result_val = sum_cc_extended[DATA_WIDTH-1:0];
-                    next_carry_val = sum_cc_extended[DATA_WIDTH];
-                    // Overflow flag for signed behavior, even if not setting it for unsigned.
-                    // For unsigned, 'carry' is the primary flag. If 'overflow_out' is also desired for unsigned,
-                    // it would be equivalent to 'carry_out' here.
+                OPCODE_INT_ADDCC_R: begin // Add with Carry/Overflow flags set
+                    logic [DATA_WIDTH:0] sum_cc_extended = $unsigned(operand_a_s1_q) + $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    logic signed [DATA_WIDTH:0] sum_signed_cc_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
+                    result_s2_comb = sum_cc_extended[DATA_WIDTH-1:0];
+                    carry_s2_comb = sum_cc_extended[DATA_WIDTH]; // Unsigned carry
+                    if ((operand_a_signed_s1_comb[DATA_WIDTH-1] == current_operand_b_signed_s1_comb[DATA_WIDTH-1]) &&
+                        (operand_a_signed_s1_comb[DATA_WIDTH-1] != sum_signed_cc_extended[DATA_WIDTH-1])) begin
+                        overflow_s2_comb = 1'b1; // Signed overflow
+                    end
                 end
-                OPCODE_INT_SUBCC_R: begin
-                    logic [DATA_WIDTH:0] diff_cc_extended = $unsigned(operand_a) - $unsigned(current_operand_b);
-                    next_result_val = diff_cc_extended[DATA_WIDTH-1:0];
-                    next_carry_val = diff_cc_extended[DATA_WIDTH]; // Borrow
+                OPCODE_INT_SUBCC_R: begin // Subtract with Carry/Overflow flags set
+                    logic [DATA_WIDTH:0] diff_cc_extended = $unsigned(operand_a_s1_q) - $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    logic signed [DATA_WIDTH:0] diff_signed_cc_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
+                    result_s2_comb = diff_cc_extended[DATA_WIDTH-1:0];
+                    carry_s2_comb = diff_cc_extended[DATA_WIDTH]; // Unsigned borrow
+                     if ((operand_a_signed_s1_comb[DATA_WIDTH-1] != current_operand_b_signed_s1_comb[DATA_WIDTH-1]) &&
+                        (operand_a_signed_s1_comb[DATA_WIDTH-1] != diff_signed_cc_extended[DATA_WIDTH-1])) begin
+                        overflow_s2_comb = 1'b1; // Signed overflow
+                    end
                 end
-                OPCODE_INT_MULCC_R: begin
-                    logic signed [DATA_WIDTH*2-1:0] product_extended = operand_a_signed_val * current_operand_b_signed_val;
-                    next_result_val = product_extended[DATA_WIDTH-1:0];
+                OPCODE_INT_MULCC_R: begin // Multiply with Overflow flag set
+                    logic signed [DATA_WIDTH*2-1:0] product_extended = operand_a_signed_s1_comb * current_operand_b_signed_s1_comb;
+                    result_s2_comb = product_extended[DATA_WIDTH-1:0];
+                    // Overflow check for signed multiply (same as regular multiply)
                     if (product_extended[DATA_WIDTH*2-1] == 1'b0) begin // Result is positive
-                        if (product_extended[DATA_WIDTH*2-1:DATA_WIDTH] != '0) next_overflow_val = 1'b1;
+                        if (product_extended[DATA_WIDTH*2-1:DATA_WIDTH] != '0) overflow_s2_comb = 1'b1;
                     end else begin // Result is negative
-                        if (product_extended[DATA_WIDTH*2-1:DATA_WIDTH] != {DATA_WIDTH{1'b1}}) next_overflow_val = 1'b1;
+                        if (product_extended[DATA_WIDTH*2-1:DATA_WIDTH] != {DATA_WIDTH{1'b1}}) overflow_s2_comb = 1'b1;
                     end
                 end
 
                 default: begin 
-                    //NOP
-                    result_valid_reg <= 1'b0; //result is invalid for consumption
-                    next_result_val = '0;
-                    next_carry_val = 1'b0;
-                    next_overflow_val = 1'b0;
+result_s2_comb = '0;
+                    carry_s2_comb = 1'b0;
+                    overflow_s2_comb = 1'b0;
+                    is_zero_s2_comb = 1'b1; // Result is zero for unhandled op
+                    is_negative_s2_comb = 1'b0; // Result is not negative
                 end
             endcase
 
-            // Common flag setting for all operations
-            next_is_zero_val = (next_result_val == '0); // set this when the result is zero
-            // Negative flag based on MSB for signed interpretation, or if it's a comparison result
-            next_is_negative_val = next_result_val[DATA_WIDTH-1]; // MSB of the result
+            is_zero_s2_comb = (result_s2_comb == '0); // Set if the result is zero
+            is_negative_s2_comb = result_s2_comb[DATA_WIDTH-1]; // Set if MSB is 1 (negative for signed)
+        end
 
-            //updating registers for next cycle
-            result_reg        <= next_result_val;
-            result_valid_reg  <= 1'b1; // Valid if instruction was processed
-            carry_reg         <= next_carry_val;
-            overflow_reg      <= next_overflow_val;
-            is_zero_reg       <= next_is_zero_val;
-            is_negative_reg   <= next_is_negative_val;
-        end else begin //no valid instruction received
-            result_valid_reg  <= 1'b0;
-            carry_reg         <= 1'b0;
-            overflow_reg      <= 1'b0;
-            is_zero_reg       <= 1'b0;
-            is_negative_reg   <= 1'b0;
+    end
+
+    //registering
+    always_ff @( posedge clk or posedge rst ) begin
+        if (rst) begin
+            // Reset Stage 1 registers
+            valid_instruction_s1_q <= 1'b0;
+            opcode_s1_q <= '0;
+            operand_a_s1_q <= '0;
+            current_operand_b_s1_q <= '0;
+
+            // Reset Stage 2 (output) registers
+            result_valid_q <= 1'b0;
+            result_q <= '0;
+            carry_q <= 1'b0;
+            overflow_q <= 1'b0;
+            is_zero_q <= 1'b0;
+            is_negative_q <= 1'b0;
+        end else begin
+            // ----------------------------------------------------
+            // Stage 1: Input Latching (executed every clock cycle)
+            // Latch current cycle's inputs into Stage 1 pipeline registers.
+            valid_instruction_s1_q <= valid_instruction;
+            opcode_s1_q <= opcode;
+            operand_a_s1_q <= operand_a;
+            current_operand_b_s1_q <= current_operand_b_comb; // current_operand_b_comb is from the always_comb block
+
+            // ----------------------------------------------------
+            // Stage 2: Result Latching
+            // Latch the combinational results from the *s2_comb wires into the output registers.
+            // This stage effectively becomes active if Stage 1 processed a valid instruction.
+            if (valid_instruction_s1_q) begin // Using valid_instruction_s1_q
+                result_q <= result_s2_comb;
+                result_valid_q <= 1'b1; // Result is valid from this pipeline stage
+                carry_q <= carry_s2_comb;
+                overflow_q <= overflow_s2_comb;
+                is_zero_q <= is_zero_s2_comb;
+                is_negative_q <= is_negative_s2_comb;
+            end else begin
+                // If Stage 1 did NOT have a valid instruction in the previous cycle,
+                // then this stage should output an invalid result and clear its registers.
+                result_valid_q <= 1'b0;
+                result_q <= '0;
+                carry_q <= 1'b0;
+                overflow_q <= 1'b0;
+                is_zero_q <= 1'b0;
+                is_negative_q <= 1'b0;
+            end
         end
     end
 
-    // Outputs from registers
-    assign result_out        = result_reg;
-    assign result_valid      = result_valid_reg;
-    assign carry_out         = carry_reg;
-    assign overflow_out      = overflow_reg;
-    assign is_zero_out       = is_zero_reg;
-    assign is_negative_out   = is_negative_reg;
 
+    // Outputs are directly from the stage-2 registers
+    assign result_out        = result_q;
+    assign result_valid      = result_valid_q;
+    assign carry_out         = carry_q;
+    assign overflow_out      = overflow_q;
+    assign is_zero_out       = is_zero_q;
+    assign is_negative_out   = is_negative_q;
 endmodule
 
 `endif
