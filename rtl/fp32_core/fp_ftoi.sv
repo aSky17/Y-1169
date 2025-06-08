@@ -25,7 +25,7 @@ module fp_ftoi #(
     //Pipelining Stage-1: Field extraction and special case detection
     logic sign_s1;
     logic [EXP_WIDTH-1:0] exp_s1;
-    logic [MANT_WIDHT-1:0] mant_s1;
+    logic [MANT_WIDTH-1:0] mant_s1;
 
     logic is_zero_s1, is_inf_s1, is_nan_s1;
     logic stage1_valid;

@@ -1,7 +1,7 @@
-We will leverage SystemVerilog's built int floating-point operators for behavioural modeling.
-On synthesis, these operators map to pre-defined floating-point IP blocks which are usually IEEE 754 compliant.
+IEEE 754 compliant.
 
 Floating-Point Opcodes (Range: 0xA0 - 0xBF)
+
 0xA0: FADD (Floating-Point Add)
 0xA1: FSUB (Floating-Point Subtract)
 0xA2: FMUL (Floating-Point Multiply)
@@ -9,8 +9,8 @@ Floating-Point Opcodes (Range: 0xA0 - 0xBF)
 0xA4: FNEG (Floating-Point Negate)
 0xA5: FABS (Floating-Point Absolute)
 0xA6: FSQRT (Floating-Point Square Root)
-0xA7: FRCP (Reciprocal: 1/x)
-0xA8: FRSQRT (Reciprocal Square Root)
+// 0xA7: FRCP (Reciprocal: 1/x) [Reserved]
+// 0xA8: FRSQRT (Reciprocal Square Root) [Reserved]
 0xA9: FMA (Fused Multiply-Add)
 0xAA: FMIN
 0xAB: FMAX

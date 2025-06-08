@@ -291,8 +291,8 @@ module fp_mul #(
                 round_up = (guard_bit && (round_bit || sticky_bit)) || (guard_bit && !round_bit && !sticky_bit && lsb_before_rounding);
 
                 //extract the 23 bit fraction and apply rounding
-                //the hidden bit is at norm_mant_shifted[MANT_WIDHT]
-                mant_final_s3 = norm_mant_shifted[MANT_WIDHT-1:0];
+                //the hidden bit is at norm_mant_shifted[MANT_WIDTh]
+                mant_final_s3 = norm_mant_shifted[MANT_WIDTH-1:0];
                 if (round_up) begin 
                     mant_final_s3 = mant_final_s3 + 1;
                 end
@@ -300,9 +300,9 @@ module fp_mul #(
                 //handling potential mantissa overflow after rounding
                 //if rounding causes the 23-bit mantissa to become all 1s and then rounds up, it effectively becomes 1.00000....
                 //this means the exponent needs to be incremented and the mantissa becomes 0
-                if (mant_final_s3[MANT_WIDHT]) begin //if overflow
+                if (mant_final_s3[MANT_WIDTH]) begin //if overflow
                     exp_adj = exp_adj + 1;
-                    mant_final_s3 = {MANT_WIDHT{1'b0}}; //mantissa becomes all zero i.e. 1.0 coz of the hidden bit as it is in normzalized form
+                    mant_final_s3 = {MANT_WIDTH{1'b0}}; //mantissa becomes all zero i.e. 1.0 coz of the hidden bit as it is in normzalized form
                 end
 
                 //exponent saturation and denormal handling
