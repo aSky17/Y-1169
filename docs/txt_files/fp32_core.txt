@@ -8,7 +8,7 @@ Floating-Point Opcodes (Range: 0xA0 - 0xBF)
 0xA3: FDIV (Floating-Point Divide)
 0xA4: FNEG (Floating-Point Negate)
 0xA5: FABS (Floating-Point Absolute)
-0xA6: FSQRT (Floating-Point Square Root)
+// 0xA6: FSQRT (Floating-Point Square Root) [Reserved]
 // 0xA7: FRCP (Reciprocal: 1/x) [Reserved]
 // 0xA8: FRSQRT (Reciprocal Square Root) [Reserved]
 0xA9: FMA (Fused Multiply-Add)

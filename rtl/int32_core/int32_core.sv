@@ -296,7 +296,7 @@ module int32_core #(
                 end
 
                 default: begin 
-result_s2_comb = '0;
+                    result_s2_comb = '0;
                     carry_s2_comb = 1'b0;
                     overflow_s2_comb = 1'b0;
                     is_zero_s2_comb = 1'b1; // Result is zero for unhandled op
