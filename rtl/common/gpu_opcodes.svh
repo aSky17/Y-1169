@@ -64,7 +64,7 @@ package gpu_opcodes;
     localparam OPCODE_INT_ADDCC_R = 8'h90; // Add with Carry Check (Unsigned)
     localparam OPCODE_INT_SUBCC_R = 8'h91; // Subtract with Carry Check (Unsigned)
     localparam OPCODE_INT_MULCC_R = 8'h92; // Multiply with Overflow Check (Signed)
-
+    localparam OPCODE_NOP = 8'h9F;
 
     // Floating-Point Arithmetic Operations (0xA0 - 0xBF)
     localparam OPCODE_FP_FADD     = 8'hA0; // Floating-Point Add

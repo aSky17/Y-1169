@@ -1,0 +1,28 @@
+# QuestaSim / ModelSim simulation files
+transcript
+vlog_direct.log
+vsim.wlf
+*.wlf
+*.log
+
+# Compilation libraries
+work/
+libraries/
+
+# Temporary files
+*.bak
+*.swp
+*.swo
+*.tmp
+*.vcd
+*.vpd
+*.ucdb
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Editor-specific
+.vscode/
+.idea/
+*.code-workspace

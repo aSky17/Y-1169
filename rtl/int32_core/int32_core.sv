@@ -3,10 +3,10 @@
 `ifndef INT32_CORE_SV
 `define INT32_CORE_SV
 
-module int32_core #(
-    import gpu_parameters::*,
-    import gpu_opcodes::*
-) (
+import gpu_parameters::*;
+import gpu_opcodes::*;
+
+module int32_core(
 
     //inputs
     input logic clk,
@@ -14,7 +14,7 @@ module int32_core #(
     input logic valid_instruction,
     input logic [OPCODE_WIDTH-1:0] opcode,
     input logic [DATA_WIDTH-1:0] operand_a,
-    input logic [DATA_WIDTH-1:0] operand_b,
+    input logic [DATA_WIDTH-1:0] operand_b, 
     input logic use_immediate,
     input logic [DATA_WIDTH-1:0] immediate_value,
 
@@ -27,11 +27,11 @@ module int32_core #(
 );
     
 
-    logic [DATA_WIDTH-1:0] current_operand_b;
+    logic [DATA_WIDTH-1:0] current_operand_b_comb;
 
     //selecting operand_b or immediate_value
     always_comb begin
-        current_operand_b = use_immediate ? immediate_value : operand_b;
+        current_operand_b_comb = use_immediate ? immediate_value : operand_b;
     end
 
     //pipelining registers
@@ -48,6 +48,20 @@ module int32_core #(
     logic overflow_q;
     logic is_zero_q;
     logic is_negative_q;
+
+    always_ff @(posedge clk or posedge rst) begin 
+        if (rst) begin
+            valid_instruction_s1_q <= 1'b0;
+            opcode_s1_q <= '0;
+            operand_a_s1_q <= '0;
+            current_operand_b_s1_q <= '0;
+        end else begin 
+            valid_instruction_s1_q <= valid_instruction;
+            opcode_s1_q <= opcode;
+            operand_a_s1_q <= operand_a;
+            current_operand_b_s1_q <= current_operand_b_comb;
+        end
+    end
 
 
     //combinational logic for stage 2
@@ -67,16 +81,16 @@ module int32_core #(
 
         if(valid_instruction_s1_q) begin
             //sign casting for stage 1 
-            logic signed [DATA_WIDTH-1:0] operand_a_signed_s1_comb = $signed(operand_a_s1_q);
-            logic signed [DATA_WIDTH-1:0] current_operand_b_signed_s1_comb = $signed(current_operand_b_s1_q);
+            automatic logic signed [DATA_WIDTH-1:0] operand_a_signed_s1_comb = $signed(operand_a_s1_q);
+            automatic logic signed [DATA_WIDTH-1:0] current_operand_b_signed_s1_comb = $signed(current_operand_b_s1_q);
             
             case (opcode_s1_q)
 
             // Arithmetic Operations
                 OPCODE_INT_ADD_R, OPCODE_INT_ADD_I: begin
                     // Signed and unsigned sums with one extra bit for carry/overflow detection
-                    logic [DATA_WIDTH:0] sum_unsigned = $unsigned(operand_a_s1_q) + $unsigned(current_operand_b_s1_q); // Using _s1_q variables
-                    logic signed [DATA_WIDTH:0] sum_signed_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
+                    automatic logic [DATA_WIDTH:0] sum_unsigned = $unsigned(operand_a_s1_q) + $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    automatic logic signed [DATA_WIDTH:0] sum_signed_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
 
                     result_s2_comb = sum_unsigned[DATA_WIDTH-1:0]; // Result is the lower DATA_WIDTH bits
 
@@ -89,8 +103,8 @@ module int32_core #(
                 end
                 OPCODE_INT_SUB_R, OPCODE_INT_SUB_I: begin
                     // Signed and unsigned differences with one extra bit for borrow/overflow detection
-                    logic [DATA_WIDTH:0] diff_unsigned = $unsigned(operand_a_s1_q) - $unsigned(current_operand_b_s1_q); // Using _s1_q variables
-                    logic signed [DATA_WIDTH:0] diff_signed_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
+                    automatic logic [DATA_WIDTH:0] diff_unsigned = $unsigned(operand_a_s1_q) - $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    automatic logic signed [DATA_WIDTH:0] diff_signed_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
 
                     result_s2_comb = diff_unsigned[DATA_WIDTH-1:0]; // Result is the lower DATA_WIDTH bits
 
@@ -103,7 +117,7 @@ module int32_core #(
                 end
                 OPCODE_INT_MUL_R, OPCODE_INT_MUL_I: begin
                     // Signed multiplication produces a 2*DATA_WIDTH bit result
-                    logic signed [DATA_WIDTH*2-1:0] product_signed = operand_a_signed_s1_comb * current_operand_b_signed_s1_comb;
+                    automatic logic signed [DATA_WIDTH*2-1:0] product_signed = operand_a_signed_s1_comb * current_operand_b_signed_s1_comb;
                     result_s2_comb = product_signed[DATA_WIDTH-1:0]; // Truncate to DATA_WIDTH bits
 
                     // Overflow for signed multiply: if upper DATA_WIDTH bits are not sign extension of lower bits
@@ -113,7 +127,7 @@ module int32_core #(
                         if (product_signed[DATA_WIDTH*2-1:DATA_WIDTH] != {DATA_WIDTH{1'b1}}) overflow_s2_comb = 1'b1;
                     end
                 end
-                OPCODE_INT_DIV_R, OPCODE_INT_DIV_I: begin
+                OPCODE_INT_DIV_R: begin
                     if (current_operand_b_s1_q == '0) begin // Using current_operand_b_s1_q
                         result_s2_comb = 'x; // Indicate undefined result for simulation on divide by zero
                         // In real hardware, consider a specific error flag or default value.
@@ -144,8 +158,8 @@ module int32_core #(
                 end
 
                 // Logical Operations
-                OPCODE_INT_AND_R, OPCODE_INT_AND_I: result_s2_comb = operand_a_s1_q & current_operand_b_s1_q; 
-                OPCODE_INT_OR_R,  OPCODE_INT_OR_I:  result_s2_comb = operand_a_s1_q | current_operand_b_s1_q; 
+                OPCODE_INT_AND_R: result_s2_comb = operand_a_s1_q & current_operand_b_s1_q; 
+                OPCODE_INT_OR_R:  result_s2_comb = operand_a_s1_q | current_operand_b_s1_q; 
                 OPCODE_INT_XOR_R: result_s2_comb = operand_a_s1_q ^ current_operand_b_s1_q; 
                 OPCODE_INT_NOT_R: result_s2_comb = ~operand_a_s1_q; 
                 OPCODE_INT_NOR_R: result_s2_comb = ~(operand_a_s1_q | current_operand_b_s1_q);
@@ -157,11 +171,11 @@ module int32_core #(
                 OPCODE_INT_SAR_R: result_s2_comb = operand_a_signed_s1_comb >>> current_operand_b_s1_q[4:0]; 
 
                 OPCODE_INT_ROTL_R: begin // Rotate Left
-                    logic [4:0] shift_amount = current_operand_b_s1_q[4:0]; 
+                    automatic logic [4:0] shift_amount = current_operand_b_s1_q[4:0]; 
                     result_s2_comb = (operand_a_s1_q << shift_amount) | (operand_a_s1_q >> (DATA_WIDTH-shift_amount)); 
                 end
                 OPCODE_INT_ROTR_R: begin // Rotate Right
-                    logic [4:0] shift_amount = current_operand_b_s1_q[4:0]; 
+                    automatic logic [4:0] shift_amount = current_operand_b_s1_q[4:0]; 
                     result_s2_comb = (operand_a_s1_q >> shift_amount) | (operand_a_s1_q << (DATA_WIDTH-shift_amount)); 
                 end
 
@@ -191,7 +205,7 @@ module int32_core #(
                 end
 
                 OPCODE_INT_CLZ_R: begin // Count Leading Zeros
-                    int count = 0;
+                    automatic int count = 0;
                     for (int i = DATA_WIDTH-1; i >= 0; i--) begin
                         if (operand_a_s1_q[i] == 1'b1) begin // Using operand_a_s1_q
                             break; // Stop counting when first '1' is found
@@ -202,7 +216,7 @@ module int32_core #(
                 end
 
                 OPCODE_INT_POPC_R: begin // Population Count (Count Set Bits)
-                    int count = 0;
+                    automatic int count = 0;
                     for (int i = 0; i < DATA_WIDTH; i++) begin
                         if (operand_a_s1_q[i] == 1'b1) begin // Using operand_a_s1_q
                             count++;
@@ -219,8 +233,8 @@ module int32_core #(
                     end
                 end
                 OPCODE_INT_BFE_R: begin // Bit Field Extract
-                    logic [4:0] bfe_start_bit = current_operand_b_s1_q[4:0]; // Using current_operand_b_s1_q
-                    logic [4:0] bfe_length = current_operand_b_s1_q[9:5]; // Length is in bits [9:5] of current_operand_b_s1_q
+                    automatic logic [4:0] bfe_start_bit = current_operand_b_s1_q[4:0]; // Using current_operand_b_s1_q
+                    automatic logic [4:0] bfe_length = current_operand_b_s1_q[9:5]; // Length is in bits [9:5] of current_operand_b_s1_q
 
                     result_s2_comb = '0; // Clear the result register first
                     for (int i = 0; i < bfe_length; i++) begin
@@ -232,7 +246,7 @@ module int32_core #(
 
                 // Saturated Operations (for signed integers)
                 OPCODE_INT_ADDSAT_R: begin
-                    logic signed [DATA_WIDTH:0] sum_sat_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
+                    automatic logic signed [DATA_WIDTH:0] sum_sat_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
                     // Check for signed overflow using classic condition
                     if ((operand_a_signed_s1_comb[DATA_WIDTH-1] == current_operand_b_signed_s1_comb[DATA_WIDTH-1]) && // Signs are the same
                         (operand_a_signed_s1_comb[DATA_WIDTH-1] != sum_sat_extended[DATA_WIDTH-1])) begin // Sign of sum is different
@@ -248,7 +262,7 @@ module int32_core #(
                 end
 
                 OPCODE_INT_SUBSAT_R: begin
-                    logic signed [DATA_WIDTH:0] diff_sat_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
+                    automatic logic signed [DATA_WIDTH:0] diff_sat_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
                     // Check for signed overflow using classic condition
                     if ((operand_a_signed_s1_comb[DATA_WIDTH-1] != current_operand_b_signed_s1_comb[DATA_WIDTH-1]) && // Signs are different
                         (operand_a_signed_s1_comb[DATA_WIDTH-1] != diff_sat_extended[DATA_WIDTH-1])) begin // Sign of difference is different from op_a
@@ -265,8 +279,8 @@ module int32_core #(
 
                 // Overflow/Carry Detect Operations (set flags but result is normal wrapped arithmetic)
                 OPCODE_INT_ADDCC_R: begin // Add with Carry/Overflow flags set
-                    logic [DATA_WIDTH:0] sum_cc_extended = $unsigned(operand_a_s1_q) + $unsigned(current_operand_b_s1_q); // Using _s1_q variables
-                    logic signed [DATA_WIDTH:0] sum_signed_cc_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
+                    automatic logic [DATA_WIDTH:0] sum_cc_extended = $unsigned(operand_a_s1_q) + $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    automatic logic signed [DATA_WIDTH:0] sum_signed_cc_extended = operand_a_signed_s1_comb + current_operand_b_signed_s1_comb;
                     result_s2_comb = sum_cc_extended[DATA_WIDTH-1:0];
                     carry_s2_comb = sum_cc_extended[DATA_WIDTH]; // Unsigned carry
                     if ((operand_a_signed_s1_comb[DATA_WIDTH-1] == current_operand_b_signed_s1_comb[DATA_WIDTH-1]) &&
@@ -275,8 +289,8 @@ module int32_core #(
                     end
                 end
                 OPCODE_INT_SUBCC_R: begin // Subtract with Carry/Overflow flags set
-                    logic [DATA_WIDTH:0] diff_cc_extended = $unsigned(operand_a_s1_q) - $unsigned(current_operand_b_s1_q); // Using _s1_q variables
-                    logic signed [DATA_WIDTH:0] diff_signed_cc_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
+                    automatic logic [DATA_WIDTH:0] diff_cc_extended = $unsigned(operand_a_s1_q) - $unsigned(current_operand_b_s1_q); // Using _s1_q variables
+                    automatic logic signed [DATA_WIDTH:0] diff_signed_cc_extended = operand_a_signed_s1_comb - current_operand_b_signed_s1_comb;
                     result_s2_comb = diff_cc_extended[DATA_WIDTH-1:0];
                     carry_s2_comb = diff_cc_extended[DATA_WIDTH]; // Unsigned borrow
                      if ((operand_a_signed_s1_comb[DATA_WIDTH-1] != current_operand_b_signed_s1_comb[DATA_WIDTH-1]) &&
@@ -285,7 +299,7 @@ module int32_core #(
                     end
                 end
                 OPCODE_INT_MULCC_R: begin // Multiply with Overflow flag set
-                    logic signed [DATA_WIDTH*2-1:0] product_extended = operand_a_signed_s1_comb * current_operand_b_signed_s1_comb;
+                    automatic logic signed [DATA_WIDTH*2-1:0] product_extended = operand_a_signed_s1_comb * current_operand_b_signed_s1_comb;
                     result_s2_comb = product_extended[DATA_WIDTH-1:0];
                     // Overflow check for signed multiply (same as regular multiply)
                     if (product_extended[DATA_WIDTH*2-1] == 1'b0) begin // Result is positive
@@ -293,6 +307,14 @@ module int32_core #(
                     end else begin // Result is negative
                         if (product_extended[DATA_WIDTH*2-1:DATA_WIDTH] != {DATA_WIDTH{1'b1}}) overflow_s2_comb = 1'b1;
                     end
+                end
+
+                OPCODE_NOP: begin 
+                    result_s2_comb = '0;
+                    carry_s2_comb = 1'b0;
+                    overflow_s2_comb = 1'b0;
+                    is_zero_s2_comb = 1'b1;
+                    is_negative_s2_comb = 1'b1;
                 end
 
                 default: begin 
@@ -313,13 +335,6 @@ module int32_core #(
     //registering
     always_ff @( posedge clk or posedge rst ) begin
         if (rst) begin
-            // Reset Stage 1 registers
-            valid_instruction_s1_q <= 1'b0;
-            opcode_s1_q <= '0;
-            operand_a_s1_q <= '0;
-            current_operand_b_s1_q <= '0;
-
-            // Reset Stage 2 (output) registers
             result_valid_q <= 1'b0;
             result_q <= '0;
             carry_q <= 1'b0;
@@ -327,18 +342,6 @@ module int32_core #(
             is_zero_q <= 1'b0;
             is_negative_q <= 1'b0;
         end else begin
-            // ----------------------------------------------------
-            // Stage 1: Input Latching (executed every clock cycle)
-            // Latch current cycle's inputs into Stage 1 pipeline registers.
-            valid_instruction_s1_q <= valid_instruction;
-            opcode_s1_q <= opcode;
-            operand_a_s1_q <= operand_a;
-            current_operand_b_s1_q <= current_operand_b_comb; // current_operand_b_comb is from the always_comb block
-
-            // ----------------------------------------------------
-            // Stage 2: Result Latching
-            // Latch the combinational results from the *s2_comb wires into the output registers.
-            // This stage effectively becomes active if Stage 1 processed a valid instruction.
             if (valid_instruction_s1_q) begin // Using valid_instruction_s1_q
                 result_q <= result_s2_comb;
                 result_valid_q <= 1'b1; // Result is valid from this pipeline stage
