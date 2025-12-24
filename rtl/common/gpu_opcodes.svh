@@ -92,6 +92,27 @@ package gpu_opcodes;
     localparam OPCODE_FP_FGT      = 8'hB4; // Greater Than
     localparam OPCODE_FP_FGE      = 8'hB5; // Greater Than or Equal
 
+    //memory opcodes:(Range: 0xC0 - 0xDF)
+    localparam OPCODE_MEMORY_LOAD = 8'hC0; //load from memory
+    localparam OPCODE_MEMORY_STORE = 8'hC1; //store to memory
+    // 0xC2 - 0xDF: Reserved for atomic memory ops, different load/store sizes, cache control
+
+    //control flow opcodes: (Range: 0xE0 - 0xEF)
+    localparam OPCODE_JMP = 8'hE0; //unconditional jump
+    localparam OPCODE_BRANCH_EQ = 8'hE1; //branch if equal
+    localparam OPCODE_BRANCH_NE = 8'hE2; //branch if not equal
+    localparam OPCODE_CALL = 8'hE3; //function call
+    localparam OPCODE_RET = 8'hE4; //return from function
+    localparam OPCODE_SYNC = 8'hE5; //synchronization
+    // 0xE6 - 0xEF: Reserved for other conditional branches, traps, exceptions
+
+    //system opcodes (Range: 0xF0 - 0xFF)
+    localparam OPCODE_SYS_HALT = 8'hF0; //halt the processor
+    localparam OPCODE_SYS_CSR_READ = 8'hF1; //read control status register
+    localparam OPCODE_SYS_CSR_WRITE = 8'hF2; //write control status register
+    // 0xF3 - 0xFF: Reserved for debugging, power management, privileged instructions
+    
+
 endpackage
 
 `endif
