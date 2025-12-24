@@ -2,7 +2,7 @@
 `define FP_MUL_SV
 
 module fp_mul #(
-    import gpu_parameters::*
+    import parameters::*
 ) (
     input logic clk,
     input logic rst,

@@ -3,8 +3,8 @@
 `ifndef INT32_CORE_SV
 `define INT32_CORE_SV
 
-import gpu_parameters::*;
-import gpu_opcodes::*;
+import parameters::*;
+import opcodes::*;
 
 module int32_core(
 

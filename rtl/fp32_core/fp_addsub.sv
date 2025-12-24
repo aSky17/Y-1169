@@ -25,7 +25,7 @@ Fraction (F): 23 bits (bits 22-0). This is the fractional part of the mantissa.
 `define FP_ADDSUB_SV
 
 module fp_addsub #(
-    import gpu_parameters::*
+    import parameters::*
 ) (
     input logic clk,
     input logic rst,

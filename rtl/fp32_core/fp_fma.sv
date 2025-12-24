@@ -10,7 +10,7 @@
 `define FP_FMA_SV
 
 module fp_fma #(
-    import gpu_parameters::*
+    import parameters::*
 ) (
     input logic clk,
     input logic rst,

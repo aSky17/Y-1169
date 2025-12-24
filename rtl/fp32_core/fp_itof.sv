@@ -2,7 +2,7 @@
 `define FP_ITOF_SV
 
 module fp_itof #(
-    import gpu_parameters::*
+    import parameters::*
 ) (
     input logic clk,
     input logic rst,

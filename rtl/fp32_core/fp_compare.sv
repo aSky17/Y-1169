@@ -2,7 +2,7 @@
 `define FP_COMPARE_SV
 
 module fp_compare #(
-    import gpu_parameters::*
+    import parameters::*
 ) (
     input logic clk,
     input logic rst,
@@ -14,16 +14,16 @@ module fp_compare #(
     output logic result_valid
 );
 
-    import gpu_opcodes::OPCODE_FP_FEQ;
-    import gpu_opcodes::OPCODE_FP_FNE;
-    import gpu_opcodes::OPCODE_FP_FLT;
-    import gpu_opcodes::OPCODE_FP_FLE;
-    import gpu_opcodes::OPCODE_FP_FGT;
-    import gpu_opcodes::OPCODE_FP_FGE;
-    import gpu_opcodes::OPCODE_FP_FNEG;
-    import gpu_opcodes::OPCODE_FP_FABS;
-    import gpu_opcodes::OPCODE_FP_FMIN;
-    import gpu_opcodes::OPCODE_FP_FMAX;
+    import opcodes::OPCODE_FP_FEQ;
+    import opcodes::OPCODE_FP_FNE;
+    import opcodes::OPCODE_FP_FLT;
+    import opcodes::OPCODE_FP_FLE;
+    import opcodes::OPCODE_FP_FGT;
+    import opcodes::OPCODE_FP_FGE;
+    import opcodes::OPCODE_FP_FNEG;
+    import opcodes::OPCODE_FP_FABS;
+    import opcodes::OPCODE_FP_FMIN;
+    import opcodes::OPCODE_FP_FMAX;
     
     initial begin 
         if (DATA_WIDTH != 32) begin 

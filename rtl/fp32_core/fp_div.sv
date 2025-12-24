@@ -10,7 +10,7 @@
 `define FP_DIV_SV
 
 module fp_div #(
-    import gpu_parameters::*
+    import parameters::*
 ) (
     input logic clk,
     input logic rst,

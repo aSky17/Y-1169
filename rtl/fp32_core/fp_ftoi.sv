@@ -2,7 +2,7 @@
 `define FP_FTOI_SV
 
 module fp_ftoi #(
-    import gpu_parameters::*
+    import parameters::*
 ) (
     input logic clk,
     input logic rst,
